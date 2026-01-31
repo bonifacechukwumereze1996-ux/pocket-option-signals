@@ -5,14 +5,22 @@ import ta
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
+# -----------------------------------
+# PAGE CONFIG
+# -----------------------------------
 st.set_page_config(page_title="Pocket Option Signals", layout="wide")
 
 st.title("📊 Pocket Option Multi-Pair Dashboard")
 st.caption("⚠️ Demo & Educational Use Only — No Guarantees")
 
-# Auto refresh every 10 seconds
+# -----------------------------------
+# AUTO REFRESH
+# -----------------------------------
 st_autorefresh(interval=10000, key="refresh")
 
+# -----------------------------------
+# USER INPUTS
+# -----------------------------------
 pairs = st.multiselect(
     "Select Pairs",
     [
@@ -32,69 +40,86 @@ timeframe_label = st.selectbox(
     ["1 Minute", "5 Minutes", "15 Minutes"]
 )
 
-interval = {"1 Minute":"1m","5 Minutes":"5m","15 Minutes":"15m"}[timeframe_label]
+interval = {"1 Minute": "1m", "5 Minutes": "5m", "15 Minutes": "15m"}[timeframe_label]
 
-# ----------------------------
+# -----------------------------------
+# FUNCTIONS
+# -----------------------------------
 def get_data(pair, interval):
-
-    symbol = pair.replace(" OTC","=X")
-
+    symbol = pair.replace(" OTC", "=X")
     df = yf.download(symbol, period="1d", interval=interval)
 
     if df.empty:
         return None
 
-    # Flatten columns
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    # Force 1D series
     close = pd.Series(df["Close"]).astype(float).values
 
     df["ema20"] = ta.trend.EMAIndicator(pd.Series(close), 20).ema_indicator()
     df["ema50"] = ta.trend.EMAIndicator(pd.Series(close), 50).ema_indicator()
-    df["rsi"]   = ta.momentum.RSIIndicator(pd.Series(close),14).rsi()
+    df["rsi"] = ta.momentum.RSIIndicator(pd.Series(close), 14).rsi()
 
     df.dropna(inplace=True)
     return df
 
-# ----------------------------
+
 def signal(row):
     if row["ema20"] > row["ema50"] and row["rsi"] > 55:
-        return "🟢 BUY","green"
+        return "🟢 BUY", "green"
     elif row["ema20"] < row["ema50"] and row["rsi"] < 45:
-        return "🔴 SELL","red"
+        return "🔴 SELL", "red"
     else:
-        return "⏸ NO TRADE","gray"
+        return "⏸ NO TRADE", "gray"
+
 
 def candle(df):
     fig = go.Figure()
-    fig.add_candlestick(x=df.index,
-        open=df["Open"],high=df["High"],
-        low=df["Low"],close=df["Close"])
-    fig.add_scatter(x=df.index,y=df["ema20"],name="EMA20")
-    fig.add_scatter(x=df.index,y=df["ema50"],name="EMA50")
+    fig.add_candlestick(
+        x=df.index,
+        open=df["Open"],
+        high=df["High"],
+        low=df["Low"],
+        close=df["Close"]
+    )
+    fig.add_scatter(x=df.index, y=df["ema20"], name="EMA20")
+    fig.add_scatter(x=df.index, y=df["ema50"], name="EMA50")
     fig.update_layout(height=300)
     return fig
 
-# ----------------------------
+# -----------------------------------
+# DISPLAY
+# -----------------------------------
 for pair in pairs:
 
     st.subheader(f"📌 {pair}")
 
     data = get_data(pair, interval)
 
-if data is None or len(data) < 50:
-    st.warning("Not enough data yet")
-    continue
+    if data is None or len(data) < 50:
+        st.warning("Not enough data yet")
+        continue
 
-sig,color = signal(data.iloc[-1])
-st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
+    sig, color = signal(data.iloc[-1])
+
+    st.markdown(
+        f"<h2 style='color:{color};text-align:center'>{sig}</h2>",
+        unsafe_allow_html=True
+    )
 
     with st.expander("📈 Indicator Data"):
-        st.dataframe(data[["Close","ema20","ema50","rsi"]].tail(20))
+        st.dataframe(data[["Close", "ema20", "ema50", "rsi"]].tail(20))
 
     with st.expander("🕯 Candlestick Chart"):
-        st.plotly_chart(candle(data),use_container_width=True)
+        st.plotly_chart(candle(data), use_container_width=True)
 
-st.info("Demo & learning only. Combine with structure and risk management.")
+# -----------------------------------
+# FOOTER
+# -----------------------------------
+st.info(
+    "- Demo & learning only\n"
+    "- Combine with Support & Resistance\n"
+    "- Risk management is important\n"
+    "- No signal is 100% accurate"
+)
