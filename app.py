@@ -89,7 +89,7 @@ if data is None or len(data) < 50:
     continue
 
 sig,color = signal(data.iloc[-1])
-    st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
+st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
 
     with st.expander("📈 Indicator Data"):
         st.dataframe(data[["Close","ema20","ema50","rsi"]].tail(20))
