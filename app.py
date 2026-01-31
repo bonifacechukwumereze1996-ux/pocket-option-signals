@@ -84,12 +84,11 @@ for pair in pairs:
 
     data = get_data(pair, interval)
 
-    if data is None:
-        st.warning("No data")
-        continue
+if data is None or len(data) < 50:
+    st.warning("Not enough data yet")
+    continue
 
-    sig,color = signal(data.iloc[-1])
-
+sig,color = signal(data.iloc[-1])
     st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
 
     with st.expander("📈 Indicator Data"):
