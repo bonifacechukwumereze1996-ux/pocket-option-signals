@@ -78,7 +78,7 @@ def plot_candlestick(data, pair):
         open=data['Open'],
         high=data['High'],
         low=data['Low'],
-        close=data['Close'],
+        close = data["Close"].squeeze(),
         name=pair
     )])
     fig.add_trace(go.Scatter(x=data.index, y=data['ema20'], mode='lines', name='EMA20'))
