@@ -3,23 +3,13 @@ import yfinance as yf
 import pandas as pd
 import ta
 import plotly.graph_objects as go
-from streamlit_autorefresh import st_autorefresh
 
-# -----------------------------------
-# PAGE CONFIG
 # -----------------------------------
 st.set_page_config(page_title="Pocket Option Signals", layout="wide")
 
 st.title("📊 Pocket Option Multi-Pair Dashboard")
 st.caption("⚠️ Demo & Educational Use Only — No Guarantees")
 
-# -----------------------------------
-# AUTO REFRESH
-# -----------------------------------
-st_autorefresh(interval=10000, key="refresh")
-
-# -----------------------------------
-# USER INPUTS
 # -----------------------------------
 pairs = st.multiselect(
     "Select Pairs",
@@ -43,8 +33,6 @@ timeframe_label = st.selectbox(
 interval = {"1 Minute": "1m", "5 Minutes": "5m", "15 Minutes": "15m"}[timeframe_label]
 
 # -----------------------------------
-# FUNCTIONS
-# -----------------------------------
 def get_data(pair, interval):
     symbol = pair.replace(" OTC", "=X")
     df = yf.download(symbol, period="1d", interval=interval)
@@ -55,16 +43,16 @@ def get_data(pair, interval):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    close = pd.Series(df["Close"]).astype(float).values
+    close = df["Close"].astype(float)
 
-    df["ema20"] = ta.trend.EMAIndicator(pd.Series(close), 20).ema_indicator()
-    df["ema50"] = ta.trend.EMAIndicator(pd.Series(close), 50).ema_indicator()
-    df["rsi"] = ta.momentum.RSIIndicator(pd.Series(close), 14).rsi()
+    df["ema20"] = ta.trend.EMAIndicator(close, 20).ema_indicator()
+    df["ema50"] = ta.trend.EMAIndicator(close, 50).ema_indicator()
+    df["rsi"] = ta.momentum.RSIIndicator(close, 14).rsi()
 
     df.dropna(inplace=True)
     return df
 
-
+# -----------------------------------
 def signal(row):
     if row["ema20"] > row["ema50"] and row["rsi"] > 55:
         return "🟢 BUY", "green"
@@ -73,7 +61,7 @@ def signal(row):
     else:
         return "⏸ NO TRADE", "gray"
 
-
+# -----------------------------------
 def candle(df):
     fig = go.Figure()
     fig.add_candlestick(
@@ -85,11 +73,9 @@ def candle(df):
     )
     fig.add_scatter(x=df.index, y=df["ema20"], name="EMA20")
     fig.add_scatter(x=df.index, y=df["ema50"], name="EMA50")
-    fig.update_layout(height=300)
+    fig.update_layout(height=350)
     return fig
 
-# -----------------------------------
-# DISPLAY
 # -----------------------------------
 for pair in pairs:
 
@@ -97,8 +83,8 @@ for pair in pairs:
 
     data = get_data(pair, interval)
 
-    if data is None or len(data) < 50:
-        st.warning("Not enough data yet")
+    if data is None or data.empty:
+        st.warning("Waiting for data...")
         continue
 
     sig, color = signal(data.iloc[-1])
@@ -115,11 +101,9 @@ for pair in pairs:
         st.plotly_chart(candle(data), use_container_width=True)
 
 # -----------------------------------
-# FOOTER
-# -----------------------------------
 st.info(
     "- Demo & learning only\n"
-    "- Combine with Support & Resistance\n"
-    "- Risk management is important\n"
+    "- EMA20 + EMA50 + RSI strategy\n"
+    "- Best on 5m and 15m\n"
     "- No signal is 100% accurate"
 )
