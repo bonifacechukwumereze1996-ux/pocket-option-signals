@@ -41,8 +41,10 @@ pairs = st.multiselect(
     default=["EURUSD=X","GBPUSD=X"]
 )
 
-tf_label = st.selectbox("Timeframe",["1m","5m","15m"])
-tf = tf_label
+# ------------------------------
+tf_label = st.selectbox("Timeframe",["1m","5m","15m","1h"])
+interval_map = {"1m":"1m","5m":"5m","15m":"15m","1h":"60m"}
+tf = interval_map[tf_label]
 
 # ------------------------------
 if "trades" not in st.session_state:
@@ -96,18 +98,19 @@ for pair in pairs:
     sig=signal(last)
     price=last.Close
 
+    # TREND STRENGTH
     strength="Weak"
     if last.adx>30: strength="Strong"
     elif last.adx>20: strength="Moderate"
-
     st.info(f"Trend Strength: {strength}")
 
+    # SIGNAL COLOR
     color="gray"
     if sig=="BUY": color="green"
     if sig=="SELL": color="red"
-
     st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
 
+    # ALERTS + WIN/LOSS TRACKING
     prev=st.session_state.last_signal.get(pair)
     prev_price=st.session_state.last_price.get(pair)
 
@@ -121,8 +124,9 @@ for pair in pairs:
 
         st.session_state.last_signal[pair]=sig
         st.session_state.last_price[pair]=price
-        send_telegram(f"{pair} {sig} on {tf}")
+        send_telegram(f"{pair} {sig} on {tf_label}")
 
+    # CANDLESTICK CHART
     fig=go.Figure()
     fig.add_candlestick(x=df.index,open=df.Open,high=df.High,low=df.Low,close=df.Close)
     fig.add_scatter(x=df.index,y=df.ema20,name="EMA20")
@@ -132,13 +136,12 @@ for pair in pairs:
 # ------------------------------
 if len(st.session_state.trades)>0:
     hist=pd.DataFrame(st.session_state.trades)
-    st.subheader("Trade History")
+    st.subheader("📜 Trade History")
     st.dataframe(hist)
 
     wins=len(hist[hist.Result=="WIN"])
     losses=len(hist[hist.Result=="LOSS"])
     acc=round((wins/(wins+losses))*100,2)
-
     st.success(f"Wins: {wins} | Losses: {losses} | Accuracy: {acc}%")
 
-st.info("Best timeframe: 5m & 15m | Demo & Learning Only")
+st.info("Best timeframe: 5m, 15m & 1h | Demo & Learning Only")
