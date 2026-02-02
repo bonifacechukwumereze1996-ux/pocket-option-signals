@@ -22,7 +22,7 @@ st.set_page_config(page_title="Pocket Option AI Signals", layout="wide")
 st.title("🤖 Pocket Option AI Signals")
 st.caption("⚠️ Demo & Educational Use Only")
 
-st_autorefresh(interval=30000,key="refresh")
+st_autorefresh(interval=30000,key="refresh")  # refresh every 30s
 
 # ------------------------------
 pairs = st.multiselect(
@@ -30,11 +30,9 @@ pairs = st.multiselect(
     [
         # MAJORS
         "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",
-
         # CROSSES
         "EURJPY=X","GBPJPY=X","AUDJPY=X","CADJPY=X","CHFJPY=X","EURGBP=X",
-
-        # OTC LABELS
+        # OTC
         "EURUSD OTC","GBPUSD OTC","USDJPY OTC","AUDUSD OTC",
         "EURJPY OTC","GBPJPY OTC","USDCHF OTC","USDCAD OTC"
     ],
@@ -57,64 +55,75 @@ if "last_price" not in st.session_state:
 # ------------------------------
 def get_data(pair):
     symbol = pair.replace(" OTC","=X")
-    df = yf.download(symbol, period="1d", interval=tf)
-    if df.empty:
+
+    # Dynamic period for sufficient rows
+    period_map = {"1m":"1d","5m":"1d","15m":"2d","60m":"7d"}
+    download_period = period_map.get(tf,"1d")
+
+    df = yf.download(symbol, period=download_period, interval=tf)
+    if df.empty or len(df) < 50:
         return None
-    df.columns=df.columns.get_level_values(0)
-    close=df["Close"]
 
-    df["ema20"]=ta.trend.EMAIndicator(close,20).ema_indicator()
-    df["ema50"]=ta.trend.EMAIndicator(close,50).ema_indicator()
-    df["rsi"]=ta.momentum.RSIIndicator(close,14).rsi()
+    df.columns = df.columns.get_level_values(0)
+    close = df["Close"]
 
-    macd=ta.trend.MACD(close)
-    df["macd"]=macd.macd()
-    df["macds"]=macd.macd_signal()
+    df["ema20"] = ta.trend.EMAIndicator(close, 20).ema_indicator()
+    df["ema50"] = ta.trend.EMAIndicator(close, 50).ema_indicator()
+    df["rsi"] = ta.momentum.RSIIndicator(close, 14).rsi()
 
-    adx=ta.trend.ADXIndicator(df["High"],df["Low"],close)
-    df["adx"]=adx.adx()
+    # Only calculate MACD and ADX if enough rows
+    if len(df) >= 50:
+        macd = ta.trend.MACD(close)
+        df["macd"] = macd.macd()
+        df["macds"] = macd.macd_signal()
+        adx = ta.trend.ADXIndicator(df["High"], df["Low"], close)
+        df["adx"] = adx.adx()
+    else:
+        df["macd"] = 0
+        df["macds"] = 0
+        df["adx"] = 0
 
     df.dropna(inplace=True)
     return df
 
 # ------------------------------
 def signal(row):
-    if row.ema20>row.ema50 and row.rsi>60 and row.macd>row.macds and row.adx>25:
+    if row.ema20 > row.ema50 and row.rsi > 60 and row.macd > row.macds and row.adx > 25:
         return "BUY"
-    if row.ema20<row.ema50 and row.rsi<40 and row.macd<row.macds and row.adx>25:
+    if row.ema20 < row.ema50 and row.rsi < 40 and row.macd < row.macds and row.adx > 25:
         return "SELL"
     return "WAIT"
 
 # ------------------------------
 for pair in pairs:
     st.subheader(pair)
-    df=get_data(pair)
+    df = get_data(pair)
 
-    if df is None or len(df)<50:
-        st.warning("Waiting data...")
+    if df is None or len(df) < 50:
+        st.warning("Waiting for sufficient data...")
         continue
 
-    last=df.iloc[-1]
-    sig=signal(last)
-    price=last.Close
+    last = df.iloc[-1]
+    sig = signal(last)
+    price = last.Close
 
     # TREND STRENGTH
-    strength="Weak"
-    if last.adx>30: strength="Strong"
-    elif last.adx>20: strength="Moderate"
+    strength = "Weak"
+    if last.adx > 30: strength = "Strong"
+    elif last.adx > 20: strength = "Moderate"
     st.info(f"Trend Strength: {strength}")
 
     # SIGNAL COLOR
-    color="gray"
-    if sig=="BUY": color="green"
-    if sig=="SELL": color="red"
-    st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>",unsafe_allow_html=True)
+    color = "gray"
+    if sig == "BUY": color = "green"
+    if sig == "SELL": color = "red"
+    st.markdown(f"<h2 style='color:{color};text-align:center'>{sig}</h2>", unsafe_allow_html=True)
 
     # ALERTS + WIN/LOSS TRACKING
-    prev=st.session_state.last_signal.get(pair)
-    prev_price=st.session_state.last_price.get(pair)
+    prev = st.session_state.last_signal.get(pair)
+    prev_price = st.session_state.last_price.get(pair)
 
-    if sig in ["BUY","SELL"] and sig!=prev:
+    if sig in ["BUY","SELL"] and sig != prev:
         if prev in ["BUY","SELL"]:
             if (prev=="BUY" and price>prev_price) or (prev=="SELL" and price<prev_price):
                 result="WIN"
@@ -122,26 +131,26 @@ for pair in pairs:
                 result="LOSS"
             st.session_state.trades.append({"Pair":pair,"Signal":prev,"Result":result})
 
-        st.session_state.last_signal[pair]=sig
-        st.session_state.last_price[pair]=price
+        st.session_state.last_signal[pair] = sig
+        st.session_state.last_price[pair] = price
         send_telegram(f"{pair} {sig} on {tf_label}")
 
-    # CANDLESTICK CHART
-    fig=go.Figure()
-    fig.add_candlestick(x=df.index,open=df.Open,high=df.High,low=df.Low,close=df.Close)
-    fig.add_scatter(x=df.index,y=df.ema20,name="EMA20")
-    fig.add_scatter(x=df.index,y=df.ema50,name="EMA50")
-    st.plotly_chart(fig,use_container_width=True)
+    # CANDLESTICK + EMA CHART
+    fig = go.Figure()
+    fig.add_candlestick(x=df.index, open=df.Open, high=df.High, low=df.Low, close=df.Close)
+    fig.add_scatter(x=df.index, y=df.ema20, name="EMA20")
+    fig.add_scatter(x=df.index, y=df.ema50, name="EMA50")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------
-if len(st.session_state.trades)>0:
-    hist=pd.DataFrame(st.session_state.trades)
+if len(st.session_state.trades) > 0:
+    hist = pd.DataFrame(st.session_state.trades)
     st.subheader("📜 Trade History")
     st.dataframe(hist)
 
-    wins=len(hist[hist.Result=="WIN"])
-    losses=len(hist[hist.Result=="LOSS"])
-    acc=round((wins/(wins+losses))*100,2)
+    wins = len(hist[hist.Result=="WIN"])
+    losses = len(hist[hist.Result=="LOSS"])
+    acc = round((wins/(wins+losses))*100,2)
     st.success(f"Wins: {wins} | Losses: {losses} | Accuracy: {acc}%")
 
 st.info("Best timeframe: 5m, 15m & 1h | Demo & Learning Only")
