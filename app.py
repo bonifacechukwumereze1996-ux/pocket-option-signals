@@ -11,6 +11,9 @@ st.title("📊 Pocket Option Multi-Pair Dashboard")
 st.caption("⚠️ Demo & Educational Use Only — No Guarantees")
 
 # -----------------------------------
+from streamlit_autorefresh import st_autorefresh
+
+st_autorefresh(interval=30 * 1000, key="refresh")  # refresh every 30 seconds
 pairs = st.multiselect(
     "Select Pairs",
     [
