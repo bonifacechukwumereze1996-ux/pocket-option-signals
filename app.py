@@ -40,7 +40,7 @@ pairs = st.multiselect(
 )
 
 # ------------------------------
-tf_label = st.selectbox("Timeframe",["1m","5m","15m","1h"])
+tf_label = st.selectbox("Select Time Frame",["1m","5m","15m","1h"])
 interval_map = {"1m":"1m","5m":"5m","15m":"15m","1h":"60m"}
 tf = interval_map[tf_label]
 
@@ -88,11 +88,39 @@ def get_data(pair):
 
 # ------------------------------
 def signal(row):
-    if row.ema20 > row.ema50 and row.rsi > 60 and row.macd > row.macds and row.adx > 25:
+    buy_points = 0
+    sell_points = 0
+
+    # EMA condition
+    if row.ema20 > row.ema50:
+        buy_points += 1
+    elif row.ema20 < row.ema50:
+        sell_points += 1
+
+    # RSI condition
+    if row.rsi > 55:
+        buy_points += 1
+    elif row.rsi < 45:
+        sell_points += 1
+
+    # MACD condition
+    if row.macd > row.macds:
+        buy_points += 1
+    elif row.macd < row.macds:
+        sell_points += 1
+
+    # ADX condition (trend strength)
+    if row.adx > 20:
+        buy_points += 1
+        sell_points += 1
+
+    # Decide signal based on points
+    if buy_points >= 3:
         return "BUY"
-    if row.ema20 < row.ema50 and row.rsi < 40 and row.macd < row.macds and row.adx > 25:
+    elif sell_points >= 3:
         return "SELL"
-    return "WAIT"
+    else:
+        return "WAIT"
 
 # ------------------------------
 for pair in pairs:
@@ -153,4 +181,4 @@ if len(st.session_state.trades) > 0:
     acc = round((wins/(wins+losses))*100,2)
     st.success(f"Wins: {wins} | Losses: {losses} | Accuracy: {acc}%")
 
-st.info("Best timeframe: 5m, 15m & 1h | Demo & Learning Only")
+st.info("Best timeframe: 15m & 1h | Demo & Learning Only")
