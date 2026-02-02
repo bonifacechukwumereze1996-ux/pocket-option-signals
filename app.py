@@ -4,24 +4,47 @@ import pandas as pd
 import ta
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
-import requests, time
+import requests
 
-# -----------------------
-BOT_TOKEN = "PUT_BOT_TOKEN"
-CHAT_ID = "PUT_CHAT_ID"
+# ------------------------------
+# OPTIONAL TELEGRAM ALERTS
+BOT_TOKEN = ""
+CHAT_ID = ""
 
 def send_telegram(msg):
+    if BOT_TOKEN=="":
+        return
     url=f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url,data={"chat_id":CHAT_ID,"text":msg})
 
-# -----------------------
+# ------------------------------
 st.set_page_config(page_title="Pocket Option AI Signals", layout="wide")
 st.title("🤖 Pocket Option AI Signals")
+st.caption("⚠️ Demo & Educational Use Only")
+
 st_autorefresh(interval=30000,key="refresh")
 
-pairs = st.multiselect("Pairs",["EURUSD=X","GBPUSD=X","USDJPY=X"],default=["EURUSD=X"])
-tf = st.selectbox("Timeframe",["1m","5m","15m"])
+# ------------------------------
+pairs = st.multiselect(
+    "Select Pairs",
+    [
+        # MAJORS
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",
 
+        # CROSSES
+        "EURJPY=X","GBPJPY=X","AUDJPY=X","CADJPY=X","CHFJPY=X","EURGBP=X",
+
+        # OTC LABELS
+        "EURUSD OTC","GBPUSD OTC","USDJPY OTC","AUDUSD OTC",
+        "EURJPY OTC","GBPJPY OTC","USDCHF OTC","USDCAD OTC"
+    ],
+    default=["EURUSD=X","GBPUSD=X"]
+)
+
+tf_label = st.selectbox("Timeframe",["1m","5m","15m"])
+tf = tf_label
+
+# ------------------------------
 if "trades" not in st.session_state:
     st.session_state.trades=[]
 if "last_signal" not in st.session_state:
@@ -29,34 +52,38 @@ if "last_signal" not in st.session_state:
 if "last_price" not in st.session_state:
     st.session_state.last_price={}
 
-# -----------------------
+# ------------------------------
 def get_data(pair):
-    df=yf.download(pair,period="1d",interval=tf)
+    symbol = pair.replace(" OTC","=X")
+    df = yf.download(symbol, period="1d", interval=tf)
+    if df.empty:
+        return None
     df.columns=df.columns.get_level_values(0)
     close=df["Close"]
+
     df["ema20"]=ta.trend.EMAIndicator(close,20).ema_indicator()
     df["ema50"]=ta.trend.EMAIndicator(close,50).ema_indicator()
     df["rsi"]=ta.momentum.RSIIndicator(close,14).rsi()
+
     macd=ta.trend.MACD(close)
     df["macd"]=macd.macd()
     df["macds"]=macd.macd_signal()
+
     adx=ta.trend.ADXIndicator(df["High"],df["Low"],close)
     df["adx"]=adx.adx()
+
     df.dropna(inplace=True)
     return df
 
-# -----------------------
+# ------------------------------
 def signal(row):
-    if row.ema20>row.ema50 and row.rsi>55 and row.macd>row.macds and row.adx>20:
+    if row.ema20>row.ema50 and row.rsi>60 and row.macd>row.macds and row.adx>25:
         return "BUY"
-    if row.ema20<row.ema50 and row.rsi<45 and row.macd<row.macds and row.adx>20:
+    if row.ema20<row.ema50 and row.rsi<40 and row.macd<row.macds and row.adx>25:
         return "SELL"
     return "WAIT"
 
-# -----------------------
-wins=0
-losses=0
-
+# ------------------------------
 for pair in pairs:
     st.subheader(pair)
     df=get_data(pair)
@@ -69,7 +96,6 @@ for pair in pairs:
     sig=signal(last)
     price=last.Close
 
-    # TREND STRENGTH
     strength="Weak"
     if last.adx>30: strength="Strong"
     elif last.adx>20: strength="Moderate"
@@ -91,12 +117,10 @@ for pair in pairs:
                 result="WIN"
             else:
                 result="LOSS"
-
             st.session_state.trades.append({"Pair":pair,"Signal":prev,"Result":result})
 
         st.session_state.last_signal[pair]=sig
         st.session_state.last_price[pair]=price
-
         send_telegram(f"{pair} {sig} on {tf}")
 
     fig=go.Figure()
@@ -105,7 +129,7 @@ for pair in pairs:
     fig.add_scatter(x=df.index,y=df.ema50,name="EMA50")
     st.plotly_chart(fig,use_container_width=True)
 
-# -----------------------
+# ------------------------------
 if len(st.session_state.trades)>0:
     hist=pd.DataFrame(st.session_state.trades)
     st.subheader("Trade History")
