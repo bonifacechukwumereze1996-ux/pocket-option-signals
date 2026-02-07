@@ -3,184 +3,161 @@ import yfinance as yf
 import pandas as pd
 import ta
 import plotly.graph_objects as go
-import time
+from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
 
-# -------------------------
-# PAGE CONFIG
-# -------------------------
-st.set_page_config(
-    page_title="Pocket Option Multi-Pair Signals",
-    layout="wide"
-)
+# -----------------------------
+# STREAMLIT CONFIG
+st.set_page_config(page_title="Pocket Option AI Heat-Map", layout="wide")
+st.title("🤖 Pocket Option AI Heat-Map Signals")
+st.caption("⚠️ Demo & Educational Use Only")
 
-st.title("📊 Pocket Option Multi-Pair Dashboard")
-st.caption("⚠️ Educational & Demo Use Only — No Guarantees")
+st_autorefresh(interval=30 * 1000, key="refresh")  # 30s refresh
 
-# -------------------------
-# AUTO REFRESH
-# -------------------------
-refresh_sec = st.slider("Auto-refresh interval (seconds)", 15, 120, 30)
-time.sleep(refresh_sec)
-st.experimental_rerun()
+# -----------------------------
+# SESSION STATE
+if "signal_start" not in st.session_state:
+    st.session_state.signal_start = {}
 
-# -------------------------
-# PAIR LISTS
-# -------------------------
-REAL_PAIRS = {
-    "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X",
-    "USDJPY": "USDJPY=X",
-    "AUDUSD": "AUDUSD=X",
-    "USDCAD": "USDCAD=X",
-    "NZDUSD": "NZDUSD=X",
-    "EURGBP": "EURGBP=X",
-    "EURJPY": "EURJPY=X",
-}
-
-OTC_PAIRS = [
-    "EURUSD OTC",
-    "GBPUSD OTC",
-    "USDJPY OTC",
-    "AUDUSD OTC",
-    "USDCAD OTC",
-    "NZDUSD OTC",
-]
-
-ALL_PAIRS = list(REAL_PAIRS.keys()) + OTC_PAIRS
-
-# -------------------------
-# USER INPUTS
-# -------------------------
+# -----------------------------
+# PAIRS
 pairs = st.multiselect(
-    "Select Pairs (Real + OTC)",
-    ALL_PAIRS,
-    default=["EURUSD", "GBPUSD", "EURUSD OTC"]
+    "Select Pairs",
+    [
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",
+        "EURJPY=X","GBPJPY=X","AUDJPY=X",
+        "EURUSD OTC","GBPUSD OTC","USDJPY OTC","AUDUSD OTC"
+    ],
+    default=["EURUSD=X","GBPUSD=X"]
 )
 
-timeframe_label = st.selectbox(
-    "Select Time Frame",
-    ["5 Minutes", "15 Minutes"]
-)
+# -----------------------------
+# TIMEFRAME
+tf_label = st.selectbox("Select Time Frame", ["1m","5m","15m","1h"])
+interval_map = {"1m":"1m","5m":"5m","15m":"15m","1h":"60m"}
+period_map = {"1m":"1d","5m":"1d","15m":"2d","1h":"7d"}
+signal_minutes = {"1m":1,"5m":5,"15m":15,"1h":60}
 
-interval_map = {
-    "5 Minutes": "5m",
-    "15 Minutes": "15m"
-}
-interval = interval_map[timeframe_label]
+interval = interval_map[tf_label]
 
-# -------------------------
-# FUNCTIONS
-# -------------------------
-def load_data(pair_key):
-    symbol = REAL_PAIRS.get(pair_key.replace(" OTC", ""), None)
-    if symbol is None:
+# -----------------------------
+# DATA FUNCTION
+def get_data(pair):
+    symbol = pair.replace(" OTC","=X")
+    df = yf.download(symbol, interval=interval, period=period_map[tf_label], progress=False)
+
+    if df.empty or len(df) < 60:
         return None
 
-    df = yf.download(symbol, period="5d", interval=interval, progress=False)
-
-    if df.empty:
-        return None
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    return df
-
-def compute_indicators(df):
-    if len(df) < 60:
-        return None
-
+    df.columns = df.columns.get_level_values(0)
     close = df["Close"]
 
     df["ema20"] = ta.trend.EMAIndicator(close, 20).ema_indicator()
     df["ema50"] = ta.trend.EMAIndicator(close, 50).ema_indicator()
     df["rsi"] = ta.momentum.RSIIndicator(close, 14).rsi()
+    macd = ta.trend.MACD(close)
+    df["macd"] = macd.macd()
+    df["macds"] = macd.macd_signal()
+    df["adx"] = ta.trend.ADXIndicator(df["High"], df["Low"], close).adx()
 
     df.dropna(inplace=True)
     return df
 
-def generate_signal(row):
-    if row["ema20"] > row["ema50"] and row["rsi"] > 55:
-        return "🟢 BUY", "green"
-    elif row["ema20"] < row["ema50"] and row["rsi"] < 45:
-        return "🔴 SELL", "red"
+# -----------------------------
+# SIGNAL LOGIC
+def get_signal(row):
+    buy, sell = 0, 0
+
+    if row.ema20 > row.ema50: buy += 1
+    else: sell += 1
+
+    if row.rsi > 55: buy += 1
+    elif row.rsi < 45: sell += 1
+
+    if row.macd > row.macds: buy += 1
+    else: sell += 1
+
+    if buy >= 3:
+        return "BUY"
+    elif sell >= 3:
+        return "SELL"
     else:
-        return "⏸ HOLD", "gray"
+        return "WAIT"
 
-# -------------------------
-# MAIN LOOP
-# -------------------------
+# -----------------------------
+# MAIN TABLE
+rows = []
+now = datetime.now()
+
 for pair in pairs:
-    is_otc = "OTC" in pair
+    df = get_data(pair)
 
-    st.markdown(f"## 📌 {pair} {'🟠 OTC (Simulated)' if is_otc else ''}")
-
-    data = load_data(pair)
-
-    if data is None:
-        st.warning("No data available")
+    if df is None:
+        rows.append([pair,"WAIT","No Data","-","-"])
         continue
 
-    data = compute_indicators(data)
+    last = df.iloc[-1]
+    signal = get_signal(last)
+    price = round(last.Close,5)
 
-    if data is None or data.empty:
-        st.info("Not enough data yet")
+    # Strength (ADX)
+    if last.adx > 30:
+        strength = "Strong"
+    elif last.adx > 20:
+        strength = "Moderate"
+    else:
+        strength = "Weak"
+
+    # Time Remaining
+    if signal in ["BUY","SELL"]:
+        if pair not in st.session_state.signal_start:
+            st.session_state.signal_start[pair] = now
+
+        elapsed = (now - st.session_state.signal_start[pair]).total_seconds()
+        remaining = max(signal_minutes[tf_label]*60 - elapsed, 0)
+
+        mins = int(remaining // 60)
+        secs = int(remaining % 60)
+        time_left = f"{mins}m {secs}s"
+    else:
+        st.session_state.signal_start.pop(pair, None)
+        time_left = "-"
+
+    rows.append([pair, signal, strength, price, time_left])
+
+# -----------------------------
+# DISPLAY TABLE
+df_table = pd.DataFrame(rows, columns=["Pair","Signal","Strength","Price","Time Remaining"])
+
+def color_signal(val):
+    if val == "BUY":
+        return "background-color:green;color:white"
+    elif val == "SELL":
+        return "background-color:red;color:white"
+    elif val == "WAIT":
+        return "background-color:gray;color:white"
+    return ""
+
+st.subheader("📊 Multi-Pair Signal Heat-Map")
+st.dataframe(df_table.style.applymap(color_signal, subset=["Signal"]))
+
+# -----------------------------
+# CHARTS
+st.subheader("📈 Detailed Charts")
+for pair in pairs:
+    df = get_data(pair)
+    if df is None:
         continue
+    with st.expander(pair):
+        fig = go.Figure()
+        fig.add_candlestick(
+            x=df.index,
+            open=df.Open, high=df.High,
+            low=df.Low, close=df.Close
+        )
+        fig.add_scatter(x=df.index, y=df.ema20, name="EMA20")
+        fig.add_scatter(x=df.index, y=df.ema50, name="EMA50")
+        fig.update_layout(height=350)
+        st.plotly_chart(fig, use_container_width=True)
 
-    last = data.iloc[-1]
-    signal, color = generate_signal(last)
-
-    st.markdown(
-        f"<h2 style='color:{color}; text-align:center'>{signal}</h2>",
-        unsafe_allow_html=True
-    )
-
-    # -------------------------
-    # CHART
-    # -------------------------
-    fig = go.Figure()
-
-    fig.add_candlestick(
-        x=data.index,
-        open=data["Open"],
-        high=data["High"],
-        low=data["Low"],
-        close=data["Close"],
-        name="Price"
-    )
-
-    fig.add_scatter(
-        x=data.index,
-        y=data["ema20"],
-        mode="lines",
-        name="EMA 20"
-    )
-
-    fig.add_scatter(
-        x=data.index,
-        y=data["ema50"],
-        mode="lines",
-        name="EMA 50"
-    )
-
-    fig.update_layout(
-        template="plotly_dark",
-        xaxis_rangeslider_visible=False,
-        height=450
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📊 Indicator Values"):
-        st.write(last[["ema20", "ema50", "rsi"]])
-
-# -------------------------
-# FOOTER
-# -------------------------
-st.info("""
-📘 Notes  
-• Real pairs use Yahoo Finance data  
-• OTC pairs are simulated using real market behavior  
-• Phone & PC compatible  
-• Educational & demo use only  
-""")
+st.info("Auto-refresh every 30s | Signals + countdown fixed | Demo & learning only")
