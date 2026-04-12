@@ -13,7 +13,7 @@ BOT_TOKEN = "PUT_YOUR_NEW_TOKEN_HERE"
 CHAT_ID = "7718634353"
 
 def send_telegram(message):
-    if BOT_TOKEN == "" or CHAT_ID == "":
+    if BOT_TOKEN == "8728430877:AAEceO5TLYWGaELAAE_eUyMAEb9jRgGkjwI" or CHAT_ID == "7718634353":
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
