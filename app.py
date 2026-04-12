@@ -26,6 +26,7 @@ def send_telegram(message):
 # STREAMLIT CONFIG
 st.set_page_config(page_title="Pocket Option AI Heat-Map", layout="wide")
 st.title("🤖 Pocket Option AI Heat-Map Signals")
+send_telegram("🔥 Bestie system fully active!")
 st.caption("⚠️ Demo & Educational Use Only")
 
 st_autorefresh(interval=30 * 1000, key="refresh")
