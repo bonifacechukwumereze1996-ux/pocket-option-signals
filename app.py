@@ -156,7 +156,7 @@ for pair in pairs:
     # TELEGRAM ALERT
     prev_signal = st.session_state.last_alert.get(pair)
 
-    if signal in ["BUY","SELL"] and signal != prev_signal:
+    if signal in ["BUY","SELL"]:
         st.session_state.last_alert[pair] = signal
 
         send_telegram(f"""
