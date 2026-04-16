@@ -163,7 +163,6 @@ for pair in pairs:
 🚨 SIGNAL ALERT 🚨
 Pair: {pair}
 Signal: {signal}
-""")
 Strength: {strength}
 Price: {price}
 Timeframe: {tf_label}
