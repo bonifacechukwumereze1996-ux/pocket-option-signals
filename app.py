@@ -126,6 +126,7 @@ for pair in pairs:
 
     last = df.iloc[-1]
     signal = get_signal(last)
+st.write(f"{pair} → {signal}") 
     price = round(last.Close, 5)
 
     # Strength
