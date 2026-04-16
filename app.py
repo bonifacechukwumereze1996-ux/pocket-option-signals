@@ -154,12 +154,12 @@ for pair in pairs:
 
     # -----------------------------
     # TELEGRAM ALERT
-    prev_signal = st.session_state.last_alert.get(pair)
+prev_signal = st.session_state.last_alert.get(pair)
 
-    if signal in ["BUY","SELL"]:
-    st.error(f"SENDING ALERT FOR {pair} {signal}")  # 
+if signal in ["BUY","SELL"]:
+    st.error(f"SENDING ALERT FOR {pair} {signal}")
 
-    send_telegram(f"""
+    message = f"""
 🚨 SIGNAL ALERT 🚨
 Pair: {pair}
 Signal: {signal}
@@ -167,8 +167,12 @@ Strength: {strength}
 Price: {price}
 Timeframe: {tf_label}
 
-🔥 Trade wisely!
-""")
+Trade wisely!
+"""
+
+    send_telegram(message)
+
+rows.append([pair, signal, strength, price, time_left])
 
     rows.append([pair, signal, strength, price, time_left])
 
