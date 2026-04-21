@@ -9,24 +9,26 @@ import requests
 
 # -----------------------------
 # TELEGRAM CONFIG
-BOT_TOKEN = "8728430877:AAEceO5TLYWGaELAAE_eUyMAEb9jRgGkjwI" 
+BOT_TOKEN = "PUT_YOUR_NEW_TOKEN_HERE"
 CHAT_ID = "7718634353"
 
 def send_telegram(message):
-    if BOT_TOKEN == "8728430877:AAEceO5TLYWGaELAAE_eUyMAEb9jRgGkjwI" or CHAT_ID == "7718634353":
+    if BOT_TOKEN == "" or CHAT_ID == "":
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
         "text": message
     }
-    requests.post(url, data=data)
+    try:
+        requests.post(url, data=data)
+    except:
+        pass
 
 # -----------------------------
 # STREAMLIT CONFIG
 st.set_page_config(page_title="Pocket Option AI Heat-Map", layout="wide")
 st.title("🤖 Pocket Option AI Heat-Map Signals")
-send_telegram("🔥 Bestie system fully active!")
 st.caption("⚠️ Demo & Educational Use Only")
 
 st_autorefresh(interval=30 * 1000, key="refresh")
@@ -121,13 +123,14 @@ for pair in pairs:
     df = get_data(pair)
 
     if df is None:
-        rows.append([pair,"WAIT","No Data","-","-"])
+        rows.append([pair, "WAIT", "No Data", "-", "-"])
         continue
 
     last = df.iloc[-1]
     signal = get_signal(last)
-    st.write(f"{pair} → {signal}") #
     price = round(last.Close, 5)
+
+    st.write(f"{pair} → {signal}")  # DEBUG
 
     # Strength
     if last.adx > 30:
@@ -152,14 +155,13 @@ for pair in pairs:
         st.session_state.signal_start.pop(pair, None)
         time_left = "-"
 
-    # -----------------------------
     # TELEGRAM ALERT
-prev_signal = st.session_state.last_alert.get(pair)
+    prev_signal = st.session_state.last_alert.get(pair)
 
-if signal in ["BUY","SELL"]:
-    st.error(f"SENDING ALERT FOR {pair} {signal}")
+    if signal in ["BUY","SELL"] and signal != prev_signal:
+        st.session_state.last_alert[pair] = signal
 
-    message = f"""
+        message = f"""
 🚨 SIGNAL ALERT 🚨
 Pair: {pair}
 Signal: {signal}
@@ -169,10 +171,7 @@ Timeframe: {tf_label}
 
 Trade wisely!
 """
-
-    send_telegram(message)
-
-rows.append([pair, signal, strength, price, time_left])
+        send_telegram(message)
 
     rows.append([pair, signal, strength, price, time_left])
 
