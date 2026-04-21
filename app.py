@@ -9,7 +9,7 @@ import requests
 
 # -----------------------------
 # TELEGRAM CONFIG
-BOT_TOKEN = " 8728430877:AAEceO5TLYWGaELAAE_eUyMAEb9jRgGkjwI"
+BOT_TOKEN = "8728430877:AAEceO5TLYWGaELAAE_eUyMAEb9jRgGkjwI"
 CHAT_ID = "7718634353"
 
 def send_telegram(message):
